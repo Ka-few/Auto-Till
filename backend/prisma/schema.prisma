@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LedgerEntryType {
+  credit
+  debit
+}
+
+enum PayoutBatchStatus {
+  pending
+  success
+  failed_retrying
+  failed_escrowed
+}
+
+model Merchant {
+  id                    String        @id @default(cuid())
+  businessName          String
+  tillNumber            String
+  encryptedDarajaCreds  String
+  createdAt             DateTime      @default(now())
+  rules                 Rule[]
+  ledgerEntries         LedgerEntry[]
+  payoutBatches         PayoutBatch[]
+}
+
+model Rule {
+  id                String        @id @default(cuid())
+  merchantId        String
+  name              String
+  priority          Int
+  triggerCondition  Json
+  allocations       Json
+  isDefault         Boolean       @default(false)
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  deactivatedAt     DateTime?
+  merchant          Merchant      @relation(fields: [merchantId], references: [id])
+  ledgerEntries     LedgerEntry[]
+}
+
+model LedgerEntry {
+  id                    String           @id @default(cuid())
+  merchantId            String
+  bucket                String
+  amount                Decimal          @db.Decimal(14, 2)
+  entryType             LedgerEntryType
+  sourceTransactionId   String
+  ruleId                String?
+  createdAt             DateTime         @default(now())
+  merchant              Merchant         @relation(fields: [merchantId], references: [id])
+  rule                  Rule?            @relation(fields: [ruleId], references: [id])
+}
+
+model PayoutBatch {
+  id                    String              @id @default(cuid())
+  merchantId            String
+  bucket                String
+  destination           String
+  amount                Decimal             @db.Decimal(14, 2)
+  status                PayoutBatchStatus    @default(pending)
+  darajaTransactionRef  String?
+  retryCount            Int                 @default(0)
+  createdAt             DateTime            @default(now())
+  resolvedAt            DateTime?
+  merchant              Merchant            @relation(fields: [merchantId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  diff        Json
+  createdAt   DateTime @default(now())
+}
